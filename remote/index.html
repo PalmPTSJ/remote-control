@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+        <!--<link rel="stylesheet" type="text/css" href="css/index.css" />-->
+        <style>
+            body {
+                background-color:white;
+            }
+            #debug {
+                width:100%;
+                margin:auto;
+                text-align:left;
+            }
+            #youtArea {
+                border:1px solid red;
+                margin:5px;
+            }
+            #musicArea {
+                border:1px solid green;
+                display:none;
+            }
+            #touchpadArea {
+                width:75%;
+                height:300px;
+                border:1px solid black;
+                background-color:#DDD;
+                margin:10px;
+            }
+            .touchpadClickArea {
+                width:35%;
+                height:50px;
+                display:inline-block;
+                background-color:#DDD;
+                margin:10px;
+                border:1px solid black;
+            }
+        </style>
+        <title>Hello Remote !</title>
+    </head>
+    <body>
+        <h1>PalmOS Remote</h1>
+        <textarea id="debug"></textarea>
+        <input type="text" id='txt'>
+        <input type="button" value="send data" onclick="sendData()">
+        <div id="youtArea">
+            Youtube : 
+            <input type="button" value="Play" onclick="yout(0)">
+            <input type="button" value="Pause" onclick="yout(1)">
+            <input type="text" id='youtTxt'>
+            <input type="button" value="Search" onclick="yout(2)">
+        </div>
+        <div id="musicArea">
+            Music : 
+            <input type="button" value="Play" onclick="mus(0)">
+            <input type="button" value="Pause" onclick="mus(1)">
+        </div>
+        <div id="touchpadArea">
+            
+        </div>
+        <div class="touchpadClickArea" id="touchpadL">
+            
+        </div>
+        <div class="touchpadClickArea" id="touchpadR">
+            
+        </div>
+        <br>
+        Controller List : <br>
+        <a href="outrun.html">Outrun</a> <a href="minecraft.html">Minecraft</a> <a href="gun.html">Gun</a>
+    </body>
+    <script type="text/javascript" src="cordova.js"></script>
+    <script type="text/javascript" src="js/index.js"></script>
+    <script type="text/javascript" src="js/PalmOS.js"></script>
+    <script type="text/javascript">
+        app.initialize();
+        function elem(id) { return document.getElementById(id);}
+        function debugg(str)
+        {
+            document.getElementById("debug").innerHTML += (str+"\n");
+            console.log(str);
+        }
+        function onDeviceReady()
+        {
+             debugg("DEVICE READY"); 
+        }
+        //var connection = new WebSocket('ws://10.0.2.2');
+        var connection = new WebSocket('ws://192.168.1.40');
+        connection.onopen = function () {
+            debugg("Connection Open"); 
+            debugg("Test encoding : "+wsEncodeMsg('REGIS', 'remote', '1')); 
+            connection.send(wsEncodeMsg('REGIS', 'remote', '1'));
+        };
+        // Log errors
+        connection.onerror = function (error) {
+            debugg("Connection Error : "+error); 
+        };
+        // Log messages from the server
+        connection.onmessage = function (e) {
+            var packet = wsDecodeMsg(e.data);
+            if(packet.op == "YOUT") {
+                connection.send(wsEncodeMsg('RELAY','youtubeModule|YOUT_LOAD|'+packet.data,'1'));
+            }
+        }
+        function sendData()
+        {
+            var data = document.getElementById("txt").value;
+            connection.send(data);
+            debugg("Manual send : "+data); 
+        }
+        function yout(type)
+        {
+            if(type == 0) connection.send(wsEncodeMsg('RELAY', 'youtubeModule|YOUT_PLAY', '1'));
+            else if(type == 1) connection.send(wsEncodeMsg('RELAY', 'youtubeModule|YOUT_PAUSE', '1'));
+            else if(type == 2) connection.send(wsEncodeMsg('YOUT', document.getElementById("youtTxt").value, '1'));
+        }
+        function mus(type)
+        {
+            
+        }
+        var touchpad_startX,touchpad_startY;
+        var touchpad_curX,touchpad_curY;
+        var touchpad_moveX,touchpad_moveY;
+        var touchpad_holdL=false;
+        var touchpad_validSwipe;
+        elem("touchpadArea").addEventListener('touchstart',touchpadStart);
+        elem("touchpadArea").addEventListener('touchmove',touchpadMove);
+        elem("touchpadArea").addEventListener('touchend',touchpadEnd);
+        function touchpadValidSwipe()
+        {
+            if(Math.abs(touchpad_curX-touchpad_startX)+Math.abs(touchpad_curY-touchpad_startY) >= 2) touchpad_validSwipe = true;
+        }
+        function touchpadSensitive()
+        {
+            var diff = Math.abs(touchpad_curX-touchpad_moveX)+Math.abs(touchpad_curY-touchpad_moveY);
+            if(diff <= 20) return 1;
+            if(diff <= 60) return 2;
+            if(diff <= 90) return 3;
+            return 4;
+        }
+        function touchpadStart(event)
+        {
+            touchpad_moveX = touchpad_curX = touchpad_startX = event.targetTouches[0].pageX;
+            touchpad_moveY = touchpad_curY = touchpad_startY = event.targetTouches[0].pageY;
+            console.log("Touchpad Start : "+event.targetTouches[0].pageX+","+event.targetTouches[0].pageY);
+            touchpad_validSwipe = false;
+            elem("touchpadArea").style.backgroundColor = "#AAA";
+            event.preventDefault();
+        }
+        function touchpadMove(event)
+        {
+            console.log("TP Move");
+            event.preventDefault();
+            if (event.targetTouches.length == 1) {
+                var touch = event.targetTouches[0];
+                // Place element where the finger is
+                touchpad_curX = touch.pageX;
+                touchpad_curY = touch.pageY;
+            }
+            touchpadValidSwipe();
+            //console.log(Math.abs(touchpad_curX-touchpad_moveX)+Math.abs(touchpad_curY-touchpad_moveY));
+            if(touchpad_validSwipe) {
+                connection.send(wsEncodeMsg('INPUT', 'MOUSEMOVE|'+(touchpad_curX-touchpad_moveX)*touchpadSensitive()+'|'+(touchpad_curY-touchpad_moveY)*touchpadSensitive(), '1'));
+                //connection.send(wsEncodeMsg('INPUT', 'MOUSEMOVE|Y|'+(touchpad_curY-touchpad_moveY)*touchpadSensitive(), '1'));
+                touchpad_moveX = touchpad_curX;
+                touchpad_moveY = touchpad_curY;
+            }
+        }
+        function touchpadEnd(event)
+        {
+            if(!touchpad_validSwipe && !touchpad_holdL) {
+                //console.log("Mouse click");
+                connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|L', '1'));
+            }
+            elem("touchpadArea").style.backgroundColor = "#DDD";
+        }
+        elem("touchpadL").addEventListener('touchstart',function(e) {
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|LD', '1'));
+            touchpad_holdL = true;
+            touchpad_validSwipe = true;
+            console.log("Touch L started : "+e.targetTouches[0].pageX+","+e.targetTouches[0].pageY);
+            elem("touchpadL").style.backgroundColor = "#AAA";
+            e.preventDefault();
+
+        });
+        elem("touchpadL").addEventListener('touchmove',function(e) {
+            e.preventDefault();
+            console.log("L MOVE : "+e.targetTouches[0].pageX+","+e.targetTouches[0].pageY);
+        });
+        elem("touchpadL").addEventListener('touchend',function(e) {
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|LU', '1'));
+            touchpad_holdL = false;
+            elem("touchpadL").style.backgroundColor = "#DDD";
+        });
+        elem("touchpadR").addEventListener('touchstart',function(e) {
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|RD', '1'));
+            elem("touchpadR").style.backgroundColor = "#AAA";
+        });
+        elem("touchpadR").addEventListener('touchend',function(e) {
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|RU', '1'));
+            elem("touchpadR").style.backgroundColor = "#DDD";
+        });
+    </script>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+        <!--<link rel="stylesheet" type="text/css" href="css/index.css" />-->
+        <style>
+            body , html {
+                background-color:white;
+                width:100%;
+                height:100%;
+                margin:0px;
+                overflow:hidden;
+            }
+            #debug {
+                width:99%;
+                margin:auto;
+                text-align:left;
+            }
+            #youtArea {
+                border:1px solid red;
+                margin:5px;
+            }
+            #musicArea {
+                border:1px solid green;
+                display:none;
+            }
+            #touchpadArea {
+                width:75%;
+                height:300px;
+                border:1px solid black;
+                background-color:#DDD;
+                margin:10px;
+            }
+            .touchpadClickArea {
+                width:35%;
+                height:50px;
+                display:inline-block;
+                background-color:#DDD;
+                margin:10px;
+                border:1px solid black;
+            }
+            .LED_green {
+                background-color:#AAFFAA;
+            }
+            .LED_red {
+                background-color:#FFAAAA;
+            }
+        </style>
+        <title>Hello Remote Gun 2 !</title>
+    </head>
+    <body>
+        <span style="color:blue" onclick="navigator.app.backHistory()">Back</span>
+        <div id="statLED" style="width:10px; height:10px; border-radius:50%;border:1px solid black; display:inline-block;"></div>
+        <div style="width:100%; height:45%; border:1px solid red;" id="brake"></div>
+        
+        <div style="width:100%; height:45%; border:1px solid green;" id="accel"></div>
+        <div id="debugDiv"> </div>
+        <div id="debugDiv2"> </div>
+    </body>
+    <script type="text/javascript" src="cordova.js"></script>
+    <script type="text/javascript" src="js/index.js"></script>
+    <script type="text/javascript" src="js/PalmOS.js"></script>
+    <script type="text/javascript">
+        app.initialize();
+        function elem(id) { return document.getElementById(id);}
+        function debugg(str)
+        {
+            console.log(str);
+        }
+        function onDeviceReady()
+        {
+             debugg("DEVICE READY"); 
+        }
+        //var connection = new WebSocket('ws://10.0.2.2');
+        var connection = new WebSocket('ws://192.168.1.40');
+        connection.onopen = function () {
+            debugg("Connection Open"); 
+            //debugg("Test encoding : "+wsEncodeMsg('REGIS', 'remote_outrun', '1')); 
+            connection.send(wsEncodeMsg('REGIS', 'remote_gun', '1'));
+            connection.send(wsEncodeMsg('REGFLAG', 'FLAG_AUTOPONG', '1'));
+        };
+        // Log errors
+        connection.onerror = function (error) {
+            debugg("Connection Error : "+error); 
+        };
+        // Log messages from the server
+        connection.onmessage = function (e) {
+            var packet = wsDecodeMsg(e.data);
+            if(packet.op == "PONG") {
+                if(elem("statLED").className == "LED_green") elem("statLED").className = "LED_red";
+                else elem("statLED").className = "LED_green";
+            }
+        }
+        elem("brake").addEventListener('touchstart',brakeStart);
+        elem("brake").addEventListener('touchend',brakeStop);
+        elem("brake").addEventListener('touchleave',brakeStop);
+        //elem("brake").addEventListener('touchcancel',brakeStop);
+        elem("accel").addEventListener('touchstart',accelStart);
+        elem("accel").addEventListener('touchend',accelStop);
+        elem("accel").addEventListener('touchleave',accelStop);
+        //elem("accel").addEventListener('touchcancel',accelStop);
+        function brakeStart(e) {
+            e.preventDefault();
+            console.log("BRAKE");
+            //connection.send(wsEncodeMsg('INPUT', 'KEYBOARD|045D', '1'));
+        }
+        function brakeStop(e) {
+            console.log("UN BRAKE");
+            //connection.send(wsEncodeMsg('INPUT', 'KEYBOARD|045U', '1'));
+        }
+        function accelStart(e) {
+            e.preventDefault();
+            console.log("ACCEL");
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|LD', '1'));
+            //connection.send(wsEncodeMsg('INPUT', 'KEYBOARD|044D', '1'));
+        }
+        function accelStop(e) {
+            console.log("UN ACCEL");
+            connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|LU', '1'));
+            //connection.send(wsEncodeMsg('INPUT', 'KEYBOARD|044U', '1'));
+        }
+        var lastDir = 0;
+        var lastTilt = 0;
+        var lastGamma,lastBeta,lastAlpha;
+        lastGamma = lastBeta = lastAlpha = 0;
+        var mining = false;
+        var mineCnt = 0;
+        var lastOffX,lastOffY;
+        lastOffX = lastOffY = 0;
+        if (window.DeviceOrientationEvent) {
+          console.log("OR SUPPPORT");
+          // Listen for the deviceorientation event and handle the raw data
+          window.addEventListener('deviceorientation', function(eventData) {
+            // gamma is the left-to-right tilt in degrees, where right is positive
+            var tiltLR = eventData.gamma;
+        
+            // beta is the front-to-back tilt in degrees, where front is positive
+            var tiltFB = eventData.beta;
+        
+            // alpha is the compass direction the device is facing in degrees
+            var dir = eventData.alpha
+            
+            
+            elem("debugDiv").innerHTML = ""+Math.round(tiltLR) + "," + Math.round(tiltFB) + "," + Math.round(dir);
+            var offX,offY;
+            if(tiltLR < 0) {
+                if(tiltFB > 0) offY = 180-tiltFB;
+                else offY = -(180+tiltFB);
+                offX = dir-90;
+            }
+            else {
+                offY = tiltFB;
+                offX = dir-270;
+            }
+            elem("debugDiv2").innerHTML = ""+Math.round(offX)+","+Math.round(offY);
+            /*var difX = (offX-lastOffX)*9;
+            var difY = -(offY-lastOffY)*12;
+            if(Math.abs(difX)+Math.abs(difY) >= 3) connection.send(wsEncodeMsg("INPUT","MOUSEMOVE|"+Math.round(difX)+"|"+Math.round(difY),'1'))
+            */
+            
+            offX *= 50;
+            offX += 800;
+            offY *= 60;
+            offY += 450;
+            if(offX<0) offX = 0;
+            if(offX > 1600) offX = 1600;
+            if(offY < 0) offY = 0;
+            if(offY > 900) offY = 900;
+            
+            if(Math.abs(offX-lastOffX)+Math.abs(offY-lastOffY) >= 3) connection.send(wsEncodeMsg("INPUT","MOUSESETPOS|"+Math.round(offX)+"|"+Math.round(offY),'1'))
+            lastOffX = offX;
+            lastOffY = offY;
+          }, false);
+        } else {
+          console.log("OR NOT SUPPPORT");
+        }
+    </script>
+</html>

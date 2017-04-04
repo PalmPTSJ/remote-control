@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+        <!--<link rel="stylesheet" type="text/css" href="css/index.css" />-->
+        <style>
+            html {
+                margin:0px;
+                height:100%;
+                width:100%;
+            }
+            body {
+                background-color:white;
+                margin:0px;
+                height:100%;
+                width:100%;
+            }
+            #touchpadArea {
+                width:100%;
+                height:100%;
+                background-color:#DDD;
+            }
+        </style>
+        <title>Hello Remote !</title>
+    </head>
+    <body>
+        <div id="touchpadArea">
+            
+        </div>
+    </body>
+    <script type="text/javascript" src="js/PalmOS.js"></script>
+    <script type="text/javascript">
+        function elem(id) { return document.getElementById(id);}
+        //var connection = new WebSocket('ws://10.0.2.2');
+        var connection = new WebSocket('ws://192.168.1.40');
+        function debugg(d) {
+            
+        }
+        connection.onopen = function () {
+            debugg("Connection Open"); 
+            debugg("Test encoding : "+wsEncodeMsg('REGIS', 'remote', '1')); 
+            connection.send(wsEncodeMsg('REGIS', 'remote', '1'));
+        };
+        // Log errors
+        connection.onerror = function (error) {
+            debugg("Connection Error : "+error); 
+        };
+        // Log messages from the server
+        connection.onmessage = function (e) {
+            var packet = wsDecodeMsg(e.data);
+        }
+        function sendData()
+        {
+            var data = document.getElementById("txt").value;
+            connection.send(data);
+            debugg("Manual send : "+data); 
+        }
+        var touchpad_startX,touchpad_startY;
+        var touchpad_curX,touchpad_curY;
+        var touchpad_moveX,touchpad_moveY;
+        var touchpad_holdL=false;
+        var touchpad_validSwipe;
+        elem("touchpadArea").addEventListener('touchstart',touchpadStart);
+        elem("touchpadArea").addEventListener('touchmove',touchpadMove);
+        elem("touchpadArea").addEventListener('touchend',touchpadEnd);
+        function touchpadValidSwipe()
+        {
+            if(Math.abs(touchpad_curX-touchpad_startX)+Math.abs(touchpad_curY-touchpad_startY) >= 6) touchpad_validSwipe = true;
+        }
+        function touchpadSensitive()
+        {
+            var diff = Math.abs(touchpad_curX-touchpad_moveX)+Math.abs(touchpad_curY-touchpad_moveY);
+            if(diff <= 50) return 1;
+            if(diff <= 80) return 2;
+            if(diff <= 130) return 3;
+            return 4;
+        }
+        function touchpadStart(event)
+        {
+            touchpad_moveX = touchpad_curX = touchpad_startX = event.targetTouches[0].pageX;
+            touchpad_moveY = touchpad_curY = touchpad_startY = event.targetTouches[0].pageY;
+            console.log("Touchpad Start : "+event.targetTouches[0].pageX+","+event.targetTouches[0].pageY);
+            touchpad_validSwipe = false;
+            elem("touchpadArea").style.backgroundColor = "#AAA";
+            event.preventDefault();
+        }
+        function touchpadMove(event)
+        {
+            console.log("TP Move");
+            event.preventDefault();
+            if (event.targetTouches.length == 1) {
+                var touch = event.targetTouches[0];
+                // Place element where the finger is
+                touchpad_curX = touch.pageX;
+                touchpad_curY = touch.pageY;
+            }
+            touchpadValidSwipe();
+            //console.log(Math.abs(touchpad_curX-touchpad_moveX)+Math.abs(touchpad_curY-touchpad_moveY));
+            if(touchpad_validSwipe) {
+                connection.send(wsEncodeMsg('INPUT', 'MOUSEMOVE|'+(touchpad_curX-touchpad_moveX)*touchpadSensitive()+'|'+(touchpad_curY-touchpad_moveY)*touchpadSensitive(), '1'));
+                //connection.send(wsEncodeMsg('INPUT', 'MOUSEMOVE|Y|'+(touchpad_curY-touchpad_moveY)*touchpadSensitive(), '1'));
+                touchpad_moveX = touchpad_curX;
+                touchpad_moveY = touchpad_curY;
+            }
+        }
+        function touchpadEnd(event)
+        {
+            if(!touchpad_validSwipe && !touchpad_holdL) {
+                //console.log("Mouse click");
+                connection.send(wsEncodeMsg('INPUT', 'MOUSECLICK|L', '1'));
+            }
+            elem("touchpadArea").style.backgroundColor = "#DDD";
+        }
+    </script>
+</html>
